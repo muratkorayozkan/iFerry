@@ -7,11 +7,13 @@
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj-local/**</DefaultItemExcludes>
     <AssemblyName>iFerry</AssemblyName>
+    <Version>0.1.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <Content Include="../SMB-Kur.ps1" Link="SMB-Kur.ps1" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="../SMB-Hesap.ps1" Link="SMB-Hesap.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../Update-iFerry.ps1" Link="Update-iFerry.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../Configure-SmbShare.ps1" Link="Configure-SmbShare.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../New-SmbTransferAccount.ps1" Link="New-SmbTransferAccount.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.7.0" />
