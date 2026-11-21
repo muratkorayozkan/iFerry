@@ -1,0 +1,56 @@
+<Window x:Class="TransferWindow" x:ClassModifier="internal"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="iFerry" Width="820" Height="620" MinWidth="645" MinHeight="490"
+ FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="14" Background="#101820" Foreground="#ECF3F4" WindowStartupLocation="CenterScreen">
+ <Window.Resources>
+  <BooleanToVisibilityConverter x:Key="visible"/>
+  <Style TargetType="RadioButton">
+   <Setter Property="Foreground" Value="#CFDDDF"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+    <Border x:Name="tab" Background="#263843" CornerRadius="8" Padding="18,8"><ContentPresenter/></Border>
+    <ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="tab" Property="Background" Value="#91E4CA"/><Setter Property="Foreground" Value="#122B29"/></Trigger></ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="Button">
+   <Setter Property="Foreground" Value="#E5F1F1"/><Setter Property="Background" Value="#263843"/><Setter Property="Padding" Value="16,10"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="shell" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+    <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="shell" Property="Opacity" Value=".82"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="shell" Property="Opacity" Value=".5"/></Trigger></ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+ </Window.Resources>
+ <ScrollViewer x:Name="pageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+ <Grid Margin="28">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel Margin="0,0,0,18"><TextBlock Text="iFerry" FontSize="31" FontWeight="SemiBold"/><StackPanel Orientation="Horizontal" Margin="0,10,0,0" AutomationProperties.Name="Aktarım yöntemi"><RadioButton x:Name="browser" Content="Tarayıcıdan aktarım" IsChecked="True"/><RadioButton x:Name="airdrop" Content="AirDrop" Margin="6,0,0,0"/><RadioButton x:Name="smb" Content="SMB" Margin="6,0,0,0"/></StackPanel></StackPanel>
+  <Border Grid.Row="1" Visibility="{Binding ElementName=browser, Path=IsChecked, Converter={StaticResource visible}}" Background="#192630" CornerRadius="14" Padding="20">
+   <StackPanel>
+    <TextBlock Text="Tarayıcıdan aktarım" FontSize="22" FontWeight="SemiBold"/>
+    <TextBlock Text="Windows’u iPhone’un kişisel erişim noktasına bağlayın. Oturumu başlatıp QR kodu iPhone kamerasıyla okutun." TextWrapping="Wrap" Margin="0,8,0,12"/>
+    <Button x:Name="browserSession" Content="Oturumu başlat" HorizontalAlignment="Left"/>
+    <TextBlock x:Name="browserStatus" TextWrapping="Wrap" Margin="0,8"/>
+    <Image x:Name="browserQr" Width="190" Height="190" HorizontalAlignment="Left" Visibility="Collapsed" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+    <TextBox x:Name="browserAddress" IsReadOnly="True" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed"/>
+   </StackPanel>
+  </Border>
+  <Border Grid.Row="1" Visibility="{Binding ElementName=airdrop, Path=IsChecked, Converter={StaticResource visible}}" CornerRadius="14" Background="#192630" Padding="22"><StackPanel><TextBlock Text="AirDrop" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="AirDrop desteği henüz eklenmedi." Foreground="#BDCCCF" Margin="0,8,0,0"/></StackPanel></Border>
+  <Border Grid.Row="1" Visibility="{Binding ElementName=smb, Path=IsChecked, Converter={StaticResource visible}}" Background="#183538" CornerRadius="14" Padding="20">
+   <StackPanel>
+    <TextBlock x:Name="status" Foreground="#8EE4CC" FontWeight="SemiBold"/>
+    <TextBox x:Name="address" AutomationProperties.Name="Sunucu adresi" IsReadOnly="True" Background="Transparent" Foreground="White" BorderThickness="0" FontSize="22" Margin="0,8"/>
+    <TextBlock Text="iPhone’da Dosyalar → Göz At → (…) → Sunucuya Bağlan" Foreground="#CEDEDF" TextWrapping="Wrap"/>
+   </StackPanel>
+  </Border>
+  <DockPanel Grid.Row="2" Margin="0,21,0,12"><Button x:Name="open" DockPanel.Dock="Right" Content="Klasörü aç" Background="#91E4CA" Foreground="#122B29"/><TextBlock Text="Gelen dosyalar" VerticalAlignment="Center" FontSize="21" FontWeight="SemiBold"/></DockPanel>
+  <Border Grid.Row="3" Background="#192630" CornerRadius="12" Padding="14">
+   <Grid><TextBlock Text="Henüz dosya yok" Foreground="#BDCCCF" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ElementName=files,Path=HasItems}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+   </TextBlock><ItemsControl x:Name="files"><ItemsControl.ItemTemplate><DataTemplate>
+    <DockPanel Margin="3,9"><TextBlock DockPanel.Dock="Right" Text="{Binding Size}" Foreground="#ACC1C4" Margin="12,0,0,0"/><Button Content="{Binding Name}" Click="OpenFile" HorizontalAlignment="Left" Background="#263843" Foreground="#91E4CA" Padding="10,5"/></DockPanel>
+   </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Grid>
+  </Border>
+  <WrapPanel Grid.Row="4" Visibility="{Binding ElementName=smb, Path=IsChecked, Converter={StaticResource visible}}" Margin="0,18,0,0"><Button x:Name="setup" Content="Paylaşımı yapılandır" Margin="0,0,8,0"/><Button x:Name="account" Content="Aktarım hesabı oluştur"/></WrapPanel>
+ </Grid>
+ </ScrollViewer>
+</Window>
