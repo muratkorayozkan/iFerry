@@ -2,7 +2,8 @@
 param([string]$Folder = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'iFerry'))
 $ErrorActionPreference = 'Stop'
 $name = 'iPhoneTransfer'
-$share = Get-SmbShare -Name 'iFerry'
+$share = Get-SmbShare -Name 'iFerry' -ErrorAction SilentlyContinue
+if (!$share) { throw 'Once SMB ekraninda Paylasimi yapilandir dugmesini kullanin.' }
 if ($share.Path -ne $Folder) { throw 'Beklenmeyen paylasim yolu.' }
 $description = 'iPhone SMB dosya aktarimi'
 $user = Get-LocalUser -Name $name -ErrorAction SilentlyContinue

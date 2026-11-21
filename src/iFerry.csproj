@@ -7,9 +7,11 @@
     <Nullable>enable</Nullable>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj-local/**</DefaultItemExcludes>
     <AssemblyName>iFerry</AssemblyName>
-    <Version>0.1.1</Version>
+    <ApplicationIcon>iFerry.ico</ApplicationIcon>
+    <Version>0.1.2</Version>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="iFerry.ico" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Content Include="../Update-iFerry.ps1" Link="Update-iFerry.ps1" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../Configure-SmbShare.ps1" Link="Configure-SmbShare.ps1" CopyToOutputDirectory="PreserveNewest" />

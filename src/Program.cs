@@ -37,23 +37,20 @@ internal partial class TransferWindow : Window
             try
             {
                 var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = true, Verb = "runas" };
-                foreach (var arg in new[] { "-NoProfile", "-File", Path.Combine(AppContext.BaseDirectory, "New-SmbTransferAccount.ps1"), "-Folder", folder })
+                foreach (var arg in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(AppContext.BaseDirectory, "New-SmbTransferAccount.ps1"), "-Folder", folder })
                     start.ArgumentList.Add(arg);
                 using var process = Process.Start(start)!;
                 await process.WaitForExitAsync();
-                MessageBox.Show(process.ExitCode == 0 ? $"Kullanıcı adı: {Environment.MachineName}\\iPhoneTransfer" :
-                    "Hesap oluşturulamadı. Daha önce oluşturduysanız mevcut parolayla bağlanabilirsiniz.", Title);
+                ShowNotice(process.ExitCode == 0 ? "Aktarım hesabı hazır" : "Hesap ayarlanamadı",
+                    process.ExitCode == 0 ? $"{Environment.MachineName}\\iPhoneTransfer hesabıyla bağlanabilirsiniz." :
+                    "SMB ekranında önce paylaşımı yapılandırın ve yönetici onayı vererek tekrar deneyin.");
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, Title); }
+            catch (Exception ex) { ShowNotice("Hesap ayarlanamadı", ex.Message); }
             finally { account.IsEnabled = true; }
         };
         open.Click += (_, _) => Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
         setup.Click += async (_, _) => await ConfigureAsync();
         timer.Tick += (_, _) => RefreshState();
-        var update = new System.Windows.Controls.Button { Content = "Güncellemeleri denetle", Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Left };
-        var updateStatus = new System.Windows.Controls.TextBlock { TextWrapping = TextWrapping.Wrap };
-        header.Children.Add(update);
-        header.Children.Add(updateStatus);
         update.Click += async (_, _) => await HandleUpdate(true);
         Loaded += async (_, _) => { RefreshState(); timer.Start(); await HandleUpdate(false); };
         Closed += (_, _) =>
@@ -74,8 +71,7 @@ internal partial class TransferWindow : Window
                         updateStatus.Text = "Güncellemeden önce aktarım oturumunu ve SMB kurulumunu tamamlayın.";
                         return;
                     }
-                    if (MessageBox.Show(this, $"{pending.Tag} yüklensin ve iFerry yeniden başlatılsın mı?", Title,
-                        MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
+                    if (!ShowNotice("Güncelleme hazır", $"{pending.Tag} yüklensin ve iFerry yeniden başlatılsın mı?", "Güncelle")) return;
                     var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
                     var updater = Path.Combine(pending.Stage, "ApplyUpdate.ps1");
                     File.Copy(Path.Combine(AppContext.BaseDirectory, "Update-iFerry.ps1"), updater, true);
@@ -170,7 +166,7 @@ internal partial class TransferWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is not IncomingFile file) return;
         try { Process.Start(new ProcessStartInfo(file.FullPath) { UseShellExecute = true }); }
-        catch (Exception ex) { MessageBox.Show(ex.Message, Title); }
+        catch (Exception ex) { ShowNotice("Dosya açılamadı", ex.Message); }
     }
 
     async Task ConfigureAsync()
@@ -180,10 +176,9 @@ internal partial class TransferWindow : Window
         {
             var wifi = Wifi() ?? throw new InvalidOperationException("Önce iPhone’un kişisel erişim noktasına bağlanın.");
             var gateway = wifi.GetIPProperties().GatewayAddresses.First(g => g.Address.AddressFamily == AddressFamily.InterNetwork).Address;
-            if (MessageBox.Show($"iPhone’un erişim noktasına bağlıysanız devam edin. {gateway} adresine SMB erişimi açılacak.", Title,
-                MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
+            if (!ShowNotice("SMB paylaşımını yapılandır", $"iPhone’un erişim noktasına bağlıysanız devam edin. {gateway} adresine SMB erişimi açılacak.", "Yapılandır")) return;
             var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = true, Verb = "runas" };
-            foreach (var arg in new[] { "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", Path.Combine(AppContext.BaseDirectory, "Configure-SmbShare.ps1"),
+            foreach (var arg in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(AppContext.BaseDirectory, "Configure-SmbShare.ps1"),
                 "-Account", WindowsIdentity.GetCurrent().Name, "-Folder", folder, "-PhoneAddress", gateway.ToString(), "-InterfaceAlias", wifi.Name })
                 start.ArgumentList.Add(arg);
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Kurulum başlatılamadı.");
@@ -191,7 +186,7 @@ internal partial class TransferWindow : Window
             if (process.ExitCode != 0) throw new InvalidOperationException($"Paylaşım kurulamadı (kod {process.ExitCode}).");
             RefreshState();
         }
-        catch (Exception ex) { MessageBox.Show(ex.Message, Title); }
+        catch (Exception ex) { ShowNotice("Paylaşım yapılandırılamadı", ex.Message); }
         finally { setup.IsEnabled = true; }
     }
 }
