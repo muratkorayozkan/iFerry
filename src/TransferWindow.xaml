@@ -69,16 +69,25 @@
      <Expander Header="İlk kullanım: iPhone’da kestirmeyi oluştur" Foreground="#ECF3F4" Margin="0,4,0,12">
       <TextBlock TextWrapping="Wrap" Margin="12,6" Text="1. Kestirmeler’de iFerry’ye gönder adlı kestirmeyi oluşturun. Ayrıntılar’da Paylaşım Sayfasında Göster’i açın. Girdi olarak dosya, görüntü ve ortam seçin.&#10;2. QR kodunu bir kez tarayın ve sonucu Aktarım Adresi adlı değişkene kaydedin.&#10;3. Her Biriyle Yinele eylemini ekleyin. Yinelenecek liste olarak Kestirme Girdisi seçin.&#10;4. Döngünün içine URL’nin İçeriğini Al eylemini yerleştirin. Adres olarak Aktarım Adresi seçin. Yöntem: POST. İstek gövdesi: Form. Dosya türünde files alanı ekleyin ve değerini Yineleme Öğesi olarak ayarlayın.&#10;5. Döngüden sonra Sonucu Göster eylemine Yineleme Sonuçları değişkenini bağlayın. Denemek için birlikte iki dosya paylaşın."/>
      </Expander>
+     <Expander Header="Metin, bağlantı ve kayıtlı bilgisayarlar" Foreground="#ECF3F4">
+      <TextBlock Margin="12,6" TextWrapping="Wrap" Text="Kestirmenin paylaşım girdilerine Metin ve URL ekleyin. Girdi metin veya URL ise aynı adrese POST gönderin; Form gövdesinde text adlı Metin alanına girdiyi bağlayın. Dosyalar için mevcut döngüyü kullanın.&#10;Sık kullandığınız bilgisayarda Bu bilgisayarı hatırla seçeneğiyle oturum açın. Gösterilen adresi kestirmede bilgisayar adıyla bir Sözlük girdisi olarak saklayın; Listeden Seç ile hedefi belirleyip POST adresi olarak kullanın. Bilgisayarın alım oturumu açık olmalıdır."/>
+     </Expander>
     </StackPanel>
     <Button x:Name="browserSession" Content="Oturumu başlat" HorizontalAlignment="Left"/>
+    <WrapPanel Margin="0,8">
+     <CheckBox x:Name="remember" Content="Bu bilgisayarı hatırla" Foreground="White" VerticalAlignment="Center"/>
+     <Button x:Name="forget" Content="Eşleşmeyi kaldır" Margin="12,0" Padding="8,4"/>
+    </WrapPanel>
     <TextBlock x:Name="browserStatus" TextWrapping="Wrap" Margin="0,8"/>
     <Image x:Name="browserQr" Width="190" Height="190" HorizontalAlignment="Left" Visibility="Collapsed" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
     <TextBox x:Name="browserAddress" IsReadOnly="True" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed"/>
     <StackPanel Visibility="{Binding ElementName=browser,Path=IsChecked,Converter={StaticResource visible}}" Margin="0,12,0,0">
      <Border Height="1" Background="#324955" Margin="0,0,0,16"/>
      <TextBlock Text="Windows’tan dosya gönder" FontSize="22" FontWeight="SemiBold"/>
-     <TextBlock Text="Dosyaları seçin, ardından iPhone’da indirme QR kodunu okutun." TextWrapping="Wrap" Foreground="#BDCCCF" Margin="0,6,0,12"/>
+     <TextBlock Text="Dosyaları pencereye bırakın veya seçin. Ardından iPhone’da indirme QR kodunu okutun." TextWrapping="Wrap" Foreground="#BDCCCF" Margin="0,6,0,12"/>
      <Button x:Name="send" Content="iPhone’a gönder" HorizontalAlignment="Left"/>
+     <Button x:Name="explorer" Content="Gezgin’in Gönder menüsüne ekle" HorizontalAlignment="Left" Margin="0,6"/>
+     <CheckBox x:Name="listMode" Content="iPhone’da dosya seç ve önizle" Foreground="White" Visibility="Collapsed"/>
      <TextBlock x:Name="sendStatus" Margin="0,8" TextWrapping="Wrap"/>
      <Image x:Name="sendQr" Width="190" Height="190" HorizontalAlignment="Left" Visibility="Collapsed" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
     </StackPanel>
@@ -94,13 +103,20 @@
   </Border>
   </Grid>
   <DockPanel Grid.Row="2" Margin="0,21,0,12"><Button x:Name="open" DockPanel.Dock="Right" Content="Klasörü aç"/><TextBlock Text="Gelen dosyalar" VerticalAlignment="Center" FontSize="21" FontWeight="SemiBold"/></DockPanel>
-  <Border Grid.Row="3" Background="#192630" CornerRadius="12" Padding="14">
+  <StackPanel Grid.Row="3">
+  <TextBlock x:Name="activity" TextWrapping="Wrap" Foreground="#91E4CA"/>
+  <StackPanel x:Name="messagePanel" Visibility="Collapsed" Margin="0,8">
+   <TextBox x:Name="messageText" IsReadOnly="True" MaxHeight="100" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"/>
+   <WrapPanel><Button x:Name="copyText" Content="Metni kopyala"/><Button x:Name="openLink" Content="Bağlantıyı aç" Margin="6,0"/></WrapPanel>
+  </StackPanel>
+  <Border Background="#192630" CornerRadius="12" Padding="14">
    <Grid><TextBlock Text="Henüz dosya yok" Foreground="#BDCCCF" HorizontalAlignment="Center" VerticalAlignment="Center">
     <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ElementName=files,Path=HasItems}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
    </TextBlock><ItemsControl x:Name="files"><ItemsControl.ItemTemplate><DataTemplate>
     <DockPanel Margin="3,9"><TextBlock DockPanel.Dock="Right" Text="{Binding Size}" Foreground="#ACC1C4" Margin="12,0,0,0"/><Button Content="{Binding Name}" Click="OpenFile" HorizontalAlignment="Left" Background="#263843" Foreground="#91E4CA" Padding="10,5"/></DockPanel>
    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Grid>
   </Border>
+  </StackPanel>
   <WrapPanel Grid.Row="4" Visibility="{Binding ElementName=smb, Path=IsChecked, Converter={StaticResource visible}}" Margin="0,18,0,0"><Button x:Name="setup" Content="Paylaşımı yapılandır" Margin="0,0,8,0"/><Button x:Name="account" Content="Aktarım hesabı oluştur"/></WrapPanel>
  </Grid>
  </ScrollViewer>

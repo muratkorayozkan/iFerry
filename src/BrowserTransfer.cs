@@ -8,33 +8,35 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
 
-internal static class BrowserTransfer
+internal static partial class BrowserTransfer
 {
     const long Limit = 1024L * 1024 * 1024;
 
-    public static async Task<(WebApplication Server, string Address)> StartAsync(IPAddress ip, string folder)
+    public static async Task<(WebApplication Server, string Address)> StartAsync(IPAddress ip, string folder,
+        Action<string>? report = null, Action<string>? receiveText = null, string? pairing = null)
     {
         Directory.CreateDirectory(folder);
-        var (server, route) = CreateSession(ip);
-        ConfigureUpload(server, route, folder);
+        var (server, route) = CreateSession(ip, pairing);
+        ConfigureUpload(server, route, folder, report, receiveText);
+        ConfigureChunks(server, route, folder, report);
         return await ListenAsync(server, route);
     }
 
-    static (WebApplication, string) CreateSession(IPAddress ip)
+    static (WebApplication, string) CreateSession(IPAddress ip, string? pairing = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.Listen(ip, 0);
+            options.Listen(ip, pairing is null ? 0 : 47329);
             options.Limits.MaxRequestBodySize = Limit;
         });
         var server = builder.Build();
-        var route = "/" + Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
+        var route = "/" + (pairing ?? Convert.ToHexString(RandomNumberGenerator.GetBytes(24)));
         return (server, route);
     }
 
-    static void ConfigureUpload(WebApplication server, string route, string folder)
+    static void ConfigureUpload(WebApplication server, string route, string folder, Action<string>? report, Action<string>? receiveText)
     {
         server.MapGet(route, (HttpContext context) =>
         {
@@ -45,6 +47,13 @@ internal static class BrowserTransfer
         {
             if (!request.HasFormContentType) return Results.BadRequest("Dosya seçin.");
             var form = await request.ReadFormAsync(new FormOptions { MultipartBodyLengthLimit = Limit }, cancellation);
+            if (form.TryGetValue("text", out var value) && form.Files.Count == 0)
+            {
+                var text = value.ToString();
+                if (string.IsNullOrWhiteSpace(text) || text.Length > 32768 || receiveText is null) return Results.BadRequest();
+                receiveText(text);
+                return Results.Text("Metin alındı.");
+            }
             if (form.Files.Count == 0) return Results.BadRequest("Dosya seçin.");
             foreach (var file in form.Files)
             {
@@ -55,14 +64,9 @@ internal static class BrowserTransfer
                 try
                 {
                     await using (var stream = File.Create(temporary))
-                        await file.CopyToAsync(stream, cancellation);
-                    for (int suffix = 0; ; suffix++)
-                    {
-                        var candidate = suffix == 0 ? name : $"{Path.GetFileNameWithoutExtension(name)} ({suffix}){Path.GetExtension(name)}";
-                        var destination = Path.Combine(folder, candidate);
-                        try { File.Move(temporary, destination); break; }
-                        catch (IOException) when (File.Exists(destination)) { }
-                    }
+                    using (var input = file.OpenReadStream())
+                        await CopyTracked(input, stream, name, report, cancellation);
+                    CommitFile(temporary, folder, name);
                 }
                 finally { File.Delete(temporary); }
             }
@@ -70,16 +74,42 @@ internal static class BrowserTransfer
         });
     }
 
-    public static Task<(WebApplication Server, string Address)> StartDownloadAsync(IPAddress ip, string[] paths)
+    public static Task<(WebApplication Server, string Address)> StartDownloadAsync(IPAddress ip, string[] paths, Action<string>? report = null)
     {
         if (paths.Length == 0) throw new ArgumentException("Dosya seçin.");
         var (server, route) = CreateSession(ip);
+        IResult Download(int index, HttpContext context)
+        {
+            if ((uint)index >= paths.Length || !File.Exists(paths[index])) return Results.NotFound();
+            var path = paths[index];
+            if (context.Request.Headers.ContainsKey("Range"))
+                return Results.File(path, "application/octet-stream", Path.GetFileName(path), enableRangeProcessing: true);
+            return Results.Stream(async output =>
+            {
+                using var input = File.OpenRead(path);
+                await CopyTracked(input, output, Path.GetFileName(path), report, context.RequestAborted);
+            }, "application/octet-stream", Path.GetFileName(path));
+        }
+        server.MapGet(route + "/list", () => Results.Content(PickerPage(route, paths), "text/html; charset=utf-8"));
+        server.MapGet(route + "/file/{index:int}", (int index, HttpContext context) => Download(index, context));
+        server.MapGet(route + "/preview/{index:int}", (int index) =>
+            (uint)index < paths.Length && ImageType(paths[index]) is string type && File.Exists(paths[index])
+                ? Results.File(paths[index], type) : Results.NotFound());
         server.MapGet(route, (HttpContext context) =>
         {
             context.Response.Headers.CacheControl = "no-store";
-            if (paths.Any(path => !File.Exists(path))) return Results.NotFound();
-            if (paths.Length == 1)
-                return Results.File(paths[0], "application/octet-stream", Path.GetFileName(paths[0]), enableRangeProcessing: true);
+            var selected = paths;
+            if (context.Request.Query.TryGetValue("item", out var items))
+            {
+                var indices = new HashSet<int>();
+                foreach (var item in items)
+                    if (!int.TryParse(item, out var i) || (uint)i >= paths.Length || !indices.Add(i))
+                        return Results.BadRequest();
+                if (indices.Count == 1) return Download(indices.Single(), context);
+                selected = indices.Select(i => paths[i]).ToArray();
+            }
+            if (selected.Any(path => !File.Exists(path))) return Results.NotFound();
+            if (paths.Length == 1) return Download(0, context);
             return Results.Stream(async output =>
             {
                 // ZipArchive writes some entry metadata synchronously.
@@ -88,7 +118,7 @@ internal static class BrowserTransfer
                 await using var archive = await ZipArchive.CreateAsync(output, ZipArchiveMode.Create,
                     leaveOpen: true, entryNameEncoding: null, cancellationToken: context.RequestAborted);
                 var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var path in paths)
+                foreach (var path in selected)
                 {
                     var name = Path.GetFileName(path);
                     for (int suffix = 1; !names.Add(name); suffix++)
@@ -96,7 +126,7 @@ internal static class BrowserTransfer
                     using var input = File.OpenRead(path);
                     var entry = archive.CreateEntry(name, CompressionLevel.NoCompression);
                     await using var destination = await entry.OpenAsync(context.RequestAborted);
-                    await input.CopyToAsync(destination, context.RequestAborted);
+                    await CopyTracked(input, destination, name, report, context.RequestAborted);
                 }
             }, "application/zip", "iFerry.zip");
         });
@@ -124,6 +154,40 @@ internal static class BrowserTransfer
         </style><main><h1>Dosya gönder</h1>
         <form method="post" enctype="multipart/form-data">
         <label>Fotoğraf veya dosya seçin <input type="file" name="files" multiple required></label><br>
-        <button>Windows’a gönder</button></form></main></html>
+        <button>Windows’a gönder</button></form><p id="status" role="status"></p>
+        <form method="post"><label>Metin veya bağlantı <textarea name="text" maxlength="32768" required></textarea></label><button>Metni gönder</button></form>
+        <script>
+        const form = document.forms[0], picker = form.elements.files, button = form.querySelector('button');
+        const status = document.querySelector('#status'), jobs = new Map(), base = location.pathname;
+        async function request(url, options) {
+          const response = await fetch(base + url, {cache:'no-store', ...options});
+          if (!response.ok) throw Error('HTTP ' + response.status);
+          return response;
+        }
+        form.onsubmit = async event => {
+          event.preventDefault();
+          button.disabled = picker.disabled = true;
+          const files = Array.from(picker.files);
+          try {
+            for (const [index,file] of files.entries()) {
+              if (!jobs.has(file)) jobs.set(file, await (await request('/start?' + new URLSearchParams({name:file.name,size:file.size}), {method:'POST'})).text());
+              const path = '/part/' + jobs.get(file);
+              let {offset,done} = await (await request(path)).json();
+              while (!done) {
+                status.textContent = (index+1) + '/' + files.length + ' · ' + file.name + ' · ' + offset.toLocaleString() + ' / ' + file.size.toLocaleString() + ' bayt';
+                const chunk = file.slice(offset, offset + 4194304);
+                await request(path + '?offset=' + offset, {method:'POST',body:chunk});
+                offset += chunk.size;
+                done = offset === file.size;
+              }
+            }
+            status.textContent = files.length + ' dosya kaydedildi.';
+            picker.value = ''; jobs.clear(); button.textContent = 'Windows’a gönder';
+          } catch (error) {
+            status.textContent = 'Gönderim durdu. Sayfayı açık tutun ve bağlantı gelince devam edin. ' + error.message;
+            button.textContent = 'Devam et';
+          } finally { button.disabled = picker.disabled = false; }
+        };
+        </script></main></html>
         """;
 }

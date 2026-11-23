@@ -31,6 +31,7 @@ internal partial class TransferWindow : Window
     public TransferWindow()
     {
         InitializeComponent();
+        ConfigureTransferActions();
         foreach (var tab in new[] { browser, shortcut, smb, airdrop })
             tab.Checked += (_, _) => AnimateMethodPanel();
         foreach (var button in new[] { send, browserSession, setup, account, update, open })
@@ -67,7 +68,14 @@ internal partial class TransferWindow : Window
         setup.Click += async (_, _) => await ConfigureAsync();
         timer.Tick += (_, _) => RefreshState();
         update.Click += async (_, _) => await HandleUpdate(true);
-        Loaded += async (_, _) => { RefreshState(); timer.Start(); await HandleUpdate(false); };
+        Loaded += async (_, _) =>
+        {
+            RefreshState();
+            timer.Start();
+            var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
+            if (args.Length > 0) await SendSelectionAsync(args);
+            await HandleUpdate(false);
+        };
         Closed += (_, _) =>
         {
             timer.Stop();
@@ -120,8 +128,10 @@ internal partial class TransferWindow : Window
         {
             if (browserServer is not null)
             {
+                await browserServer.StopAsync();
                 await browserServer.DisposeAsync();
                 browserServer = null;
+                remember.IsEnabled = forget.IsEnabled = true;
                 browserSession.Content = "Oturumu başlat";
                 browserAddress.Visibility = browserQr.Visibility = Visibility.Collapsed;
                 browserStatus.Text = "Oturum kapatıldı.";
@@ -130,12 +140,15 @@ internal partial class TransferWindow : Window
             var ip = Wifi()?.GetIPProperties().UnicastAddresses
                 .FirstOrDefault(entry => entry.Address.AddressFamily == AddressFamily.InterNetwork)?.Address
                 ?? throw new InvalidOperationException("Önce iPhone’un kişisel erişim noktasına bağlanın.");
-            var session = await BrowserTransfer.StartAsync(ip, folder);
+            string? token = remember.IsChecked == true ? ReadPairing() : null;
+            var session = await BrowserTransfer.StartAsync(ip, folder, Report, ShowText, token);
             browserServer = session.Server;
+            remember.IsEnabled = forget.IsEnabled = false;
             browserSession.Content = "Oturumu kapat";
-            browserAddress.Text = session.Address;
+            browserAddress.Text = token is null ? session.Address :
+                new UriBuilder(session.Address) { Host = Environment.MachineName + ".local" }.Uri.AbsoluteUri;
             browserAddress.Visibility = Visibility.Visible;
-            browserQr.Source = MakeQr(session.Address);
+            browserQr.Source = MakeQr(browserAddress.Text);
             browserQr.Visibility = Visibility.Visible;
             browserStatus.Text = "Oturum açık. Dosyalar iFerry klasörüne kaydedilir.";
         }
@@ -168,32 +181,40 @@ internal partial class TransferWindow : Window
         return bitmap;
     }
 
-    async Task ToggleDownloadAsync()
+    async Task ToggleDownloadAsync(string[]? selection = null)
     {
         send.IsEnabled = false;
         try
         {
             if (downloadServer is not null)
             {
+                if (selection is not null) { sendStatus.Text = "Önce açık indirme oturumunu kapatın."; return; }
                 await downloadServer.StopAsync();
                 await downloadServer.DisposeAsync();
                 downloadServer = null;
                 sendQr.Visibility = Visibility.Collapsed;
                 sendQr.Source = null;
+                listMode.Visibility = Visibility.Collapsed;
                 send.Content = "iPhone’a gönder";
                 sendStatus.Text = "İndirme oturumu kapatıldı.";
                 return;
             }
-            var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "iPhone’a gönderilecek dosyaları seçin" };
-            if (picker.ShowDialog(this) != true) return;
+            if (selection is null)
+            {
+                var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "iPhone’a gönderilecek dosyaları seçin" };
+                if (picker.ShowDialog(this) != true) return;
+                selection = picker.FileNames;
+            }
             var ip = Wifi()?.GetIPProperties().UnicastAddresses
                 .FirstOrDefault(entry => entry.Address.AddressFamily == AddressFamily.InterNetwork)?.Address
                 ?? throw new InvalidOperationException("Önce iPhone’un kişisel erişim noktasına bağlanın.");
-            var paths = picker.FileNames;
-            var session = await BrowserTransfer.StartDownloadAsync(ip, paths);
+            var paths = selection;
+            var session = await BrowserTransfer.StartDownloadAsync(ip, paths, Report);
             downloadServer = session.Server;
             send.Content = "İndirme oturumunu kapat";
-            sendQr.Source = MakeQr(session.Address);
+            downloadAddress = session.Address;
+            listMode.Visibility = Visibility.Visible;
+            RefreshDownloadQr();
             sendQr.Visibility = Visibility.Visible;
             var label = paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} dosya (ZIP)";
             sendStatus.Text = $"{label} hazır. İndirmek için bu QR kodunu iPhone kamerasıyla okutun.";
