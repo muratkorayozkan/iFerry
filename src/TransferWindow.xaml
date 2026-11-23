@@ -39,12 +39,26 @@
     <RadioButton x:Name="browser" Content="Tarayıcıdan aktarım" IsChecked="True"/>
     <RadioButton x:Name="airdrop" Content="AirDrop" Margin="6,0,0,0"/>
     <RadioButton x:Name="smb" Content="SMB" Margin="6,0,0,0"/>
+    <RadioButton x:Name="shortcut" Content="iOS Kestirmesi" Margin="6,0,0,0"/>
    </WrapPanel>
   </StackPanel>
-  <Border Grid.Row="1" Visibility="{Binding ElementName=browser, Path=IsChecked, Converter={StaticResource visible}}" Background="#192630" CornerRadius="14" Padding="20">
+  <Border Grid.Row="1" Background="#192630" CornerRadius="14" Padding="20">
+   <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+    <DataTrigger Binding="{Binding ElementName=browser,Path=IsChecked}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+    <DataTrigger Binding="{Binding ElementName=shortcut,Path=IsChecked}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+   </Style.Triggers></Style></Border.Style>
    <StackPanel>
+    <StackPanel Visibility="{Binding ElementName=browser,Path=IsChecked,Converter={StaticResource visible}}">
     <TextBlock Text="Tarayıcıdan aktarım" FontSize="22" FontWeight="SemiBold"/>
     <TextBlock Text="Windows’u iPhone’un kişisel erişim noktasına bağlayın. Oturumu başlatıp QR kodu iPhone kamerasıyla okutun." TextWrapping="Wrap" Margin="0,8,0,12"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding ElementName=shortcut,Path=IsChecked,Converter={StaticResource visible}}">
+     <TextBlock Text="Paylaş → iFerry’ye gönder" FontSize="22" FontWeight="SemiBold"/>
+     <TextBlock Margin="0,8" TextWrapping="Wrap" Text="Windows’u iPhone’un kişisel erişim noktasına bağlayıp oturumu başlatın. iPhone’dan dosyayı paylaşırken kestirmeyi seçin ve QR kodu okutun."/>
+     <Expander Header="İlk kullanım: iPhone’da kestirmeyi oluştur" Foreground="#ECF3F4" Margin="0,4,0,12">
+      <TextBlock TextWrapping="Wrap" Margin="12,6" Text="1. Kestirmeler’de iFerry’ye gönder adlı kestirmeyi oluşturun. Ayrıntılar’da Paylaşım Sayfasında Göster’i açın. Girdi olarak dosya, görüntü ve ortam seçin.&#10;2. QR kodu tara eylemini ekleyin.&#10;3. URL’nin İçeriğini Al eyleminde adres olarak taranan QR kodunu seçin. Yöntem: POST. İstek gövdesi: Form. Dosya türünde files alanı ekleyip değer olarak Kestirme Girdisi’ni seçin.&#10;4. Sonucu Göster eylemini ekleyin. İlk denemede bir PDF paylaşın."/>
+     </Expander>
+    </StackPanel>
     <Button x:Name="browserSession" Content="Oturumu başlat" HorizontalAlignment="Left"/>
     <TextBlock x:Name="browserStatus" TextWrapping="Wrap" Margin="0,8"/>
     <Image x:Name="browserQr" Width="190" Height="190" HorizontalAlignment="Left" Visibility="Collapsed" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
