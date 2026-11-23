@@ -56,7 +56,7 @@
      <TextBlock Text="Paylaş → iFerry’ye gönder" FontSize="22" FontWeight="SemiBold"/>
      <TextBlock Margin="0,8" TextWrapping="Wrap" Text="Windows’u iPhone’un kişisel erişim noktasına bağlayıp oturumu başlatın. iPhone’dan dosyayı paylaşırken kestirmeyi seçin ve QR kodu okutun."/>
      <Expander Header="İlk kullanım: iPhone’da kestirmeyi oluştur" Foreground="#ECF3F4" Margin="0,4,0,12">
-      <TextBlock TextWrapping="Wrap" Margin="12,6" Text="1. Kestirmeler’de iFerry’ye gönder adlı kestirmeyi oluşturun. Ayrıntılar’da Paylaşım Sayfasında Göster’i açın. Girdi olarak dosya, görüntü ve ortam seçin.&#10;2. QR kodu tara eylemini ekleyin.&#10;3. URL’nin İçeriğini Al eyleminde adres olarak taranan QR kodunu seçin. Yöntem: POST. İstek gövdesi: Form. Dosya türünde files alanı ekleyip değer olarak Kestirme Girdisi’ni seçin.&#10;4. Sonucu Göster eylemini ekleyin. İlk denemede bir PDF paylaşın."/>
+      <TextBlock TextWrapping="Wrap" Margin="12,6" Text="1. Kestirmeler’de iFerry’ye gönder adlı kestirmeyi oluşturun. Ayrıntılar’da Paylaşım Sayfasında Göster’i açın. Girdi olarak dosya, görüntü ve ortam seçin.&#10;2. QR kodunu bir kez tarayın ve sonucu Aktarım Adresi adlı değişkene kaydedin.&#10;3. Her Biriyle Yinele eylemini ekleyin. Yinelenecek liste olarak Kestirme Girdisi seçin.&#10;4. Döngünün içine URL’nin İçeriğini Al eylemini yerleştirin. Adres olarak Aktarım Adresi seçin. Yöntem: POST. İstek gövdesi: Form. Dosya türünde files alanı ekleyin ve değerini Yineleme Öğesi olarak ayarlayın.&#10;5. Döngüden sonra Sonucu Göster eylemine Yineleme Sonuçları değişkenini bağlayın. Denemek için birlikte iki dosya paylaşın."/>
      </Expander>
     </StackPanel>
     <Button x:Name="browserSession" Content="Oturumu başlat" HorizontalAlignment="Left"/>
