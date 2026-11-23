@@ -8,7 +8,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj-local/**</DefaultItemExcludes>
     <AssemblyName>iFerry</AssemblyName>
     <ApplicationIcon>iFerry.ico</ApplicationIcon>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="iFerry.ico" />

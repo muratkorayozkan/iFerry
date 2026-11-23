@@ -24,12 +24,27 @@ internal partial class TransferWindow : Window
     readonly string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "iFerry");
     readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(4) };
     WebApplication? browserServer;
+    WebApplication? downloadServer;
     (string Stage, string Tag)? pendingUpdate;
     bool installing;
 
     public TransferWindow()
     {
         InitializeComponent();
+        foreach (var tab in new[] { browser, shortcut, smb, airdrop })
+            tab.Checked += (_, _) => AnimateMethodPanel();
+        foreach (var button in new[] { send, browserSession, setup, account, update, open })
+        {
+            button.RenderTransform = new System.Windows.Media.TranslateTransform();
+            button.Click += (_, _) =>
+            {
+                if (SystemParameters.ClientAreaAnimation)
+                    button.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty,
+                        new System.Windows.Media.Animation.DoubleAnimation(2, 0, TimeSpan.FromMilliseconds(110))
+                        { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+            };
+        }
+        send.Click += async (_, _) => await ToggleDownloadAsync();
         browserSession.Click += async (_, _) => await ToggleBrowserAsync();
         account.Click += async (_, _) =>
         {
@@ -66,7 +81,7 @@ internal partial class TransferWindow : Window
             {
                 if (pendingUpdate is { } pending)
                 {
-                    if (browserServer is not null || !setup.IsEnabled || !account.IsEnabled)
+                    if (browserServer is not null || downloadServer is not null || !send.IsEnabled || !setup.IsEnabled || !account.IsEnabled)
                     {
                         updateStatus.Text = "Güncellemeden önce aktarım oturumunu ve SMB kurulumunu tamamlayın.";
                         return;
@@ -120,20 +135,71 @@ internal partial class TransferWindow : Window
             browserSession.Content = "Oturumu kapat";
             browserAddress.Text = session.Address;
             browserAddress.Visibility = Visibility.Visible;
-            using var qrData = QRCodeGenerator.GenerateQrCode(session.Address, QRCodeGenerator.ECCLevel.M);
-            using var qr = new PngByteQRCode(qrData);
-            using var png = new MemoryStream(qr.GetGraphic(5));
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = png;
-            bitmap.EndInit();
-            browserQr.Source = bitmap;
+            browserQr.Source = MakeQr(session.Address);
             browserQr.Visibility = Visibility.Visible;
             browserStatus.Text = "Oturum açık. Dosyalar iFerry klasörüne kaydedilir.";
         }
         catch (Exception ex) { browserStatus.Text = ex.Message; }
         finally { browserSession.IsEnabled = true; }
+    }
+
+    void AnimateMethodPanel()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+        var duration = TimeSpan.FromMilliseconds(160);
+        methodPanel.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(.72, 1, duration)
+            { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+        var shift = (System.Windows.Media.TranslateTransform)methodPanel.RenderTransform;
+        shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(5, 0, duration)
+            { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+    }
+
+    static BitmapImage MakeQr(string address)
+    {
+        using var data = QRCodeGenerator.GenerateQrCode(address, QRCodeGenerator.ECCLevel.M);
+        using var qr = new PngByteQRCode(data);
+        using var png = new MemoryStream(qr.GetGraphic(5));
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = png;
+        bitmap.EndInit();
+        return bitmap;
+    }
+
+    async Task ToggleDownloadAsync()
+    {
+        send.IsEnabled = false;
+        try
+        {
+            if (downloadServer is not null)
+            {
+                await downloadServer.StopAsync();
+                await downloadServer.DisposeAsync();
+                downloadServer = null;
+                sendQr.Visibility = Visibility.Collapsed;
+                sendQr.Source = null;
+                send.Content = "iPhone’a gönder";
+                sendStatus.Text = "İndirme oturumu kapatıldı.";
+                return;
+            }
+            var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "iPhone’a gönderilecek dosyaları seçin" };
+            if (picker.ShowDialog(this) != true) return;
+            var ip = Wifi()?.GetIPProperties().UnicastAddresses
+                .FirstOrDefault(entry => entry.Address.AddressFamily == AddressFamily.InterNetwork)?.Address
+                ?? throw new InvalidOperationException("Önce iPhone’un kişisel erişim noktasına bağlanın.");
+            var paths = picker.FileNames;
+            var session = await BrowserTransfer.StartDownloadAsync(ip, paths);
+            downloadServer = session.Server;
+            send.Content = "İndirme oturumunu kapat";
+            sendQr.Source = MakeQr(session.Address);
+            sendQr.Visibility = Visibility.Visible;
+            var label = paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} dosya (ZIP)";
+            sendStatus.Text = $"{label} hazır. İndirmek için bu QR kodunu iPhone kamerasıyla okutun.";
+        }
+        catch (Exception ex) { sendStatus.Text = ex.Message; }
+        finally { send.IsEnabled = true; }
     }
 
     static NetworkInterface? Wifi() => NetworkInterface.GetAllNetworkInterfaces()

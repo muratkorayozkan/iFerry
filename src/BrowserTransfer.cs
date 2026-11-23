@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +15,13 @@ internal static class BrowserTransfer
     public static async Task<(WebApplication Server, string Address)> StartAsync(IPAddress ip, string folder)
     {
         Directory.CreateDirectory(folder);
+        var (server, route) = CreateSession(ip);
+        ConfigureUpload(server, route, folder);
+        return await ListenAsync(server, route);
+    }
+
+    static (WebApplication, string) CreateSession(IPAddress ip)
+    {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options =>
@@ -23,6 +31,11 @@ internal static class BrowserTransfer
         });
         var server = builder.Build();
         var route = "/" + Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
+        return (server, route);
+    }
+
+    static void ConfigureUpload(WebApplication server, string route, string folder)
+    {
         server.MapGet(route, (HttpContext context) =>
         {
             context.Response.Headers.CacheControl = "no-store";
@@ -55,6 +68,43 @@ internal static class BrowserTransfer
             }
             return Results.Content("Dosyalar kaydedildi.", "text/plain; charset=utf-8");
         });
+    }
+
+    public static Task<(WebApplication Server, string Address)> StartDownloadAsync(IPAddress ip, string[] paths)
+    {
+        if (paths.Length == 0) throw new ArgumentException("Dosya seçin.");
+        var (server, route) = CreateSession(ip);
+        server.MapGet(route, (HttpContext context) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            if (paths.Any(path => !File.Exists(path))) return Results.NotFound();
+            if (paths.Length == 1)
+                return Results.File(paths[0], "application/octet-stream", Path.GetFileName(paths[0]), enableRangeProcessing: true);
+            return Results.Stream(async output =>
+            {
+                // ZipArchive writes some entry metadata synchronously.
+                var bodyControl = context.Features.Get<IHttpBodyControlFeature>();
+                if (bodyControl is not null) bodyControl.AllowSynchronousIO = true;
+                await using var archive = await ZipArchive.CreateAsync(output, ZipArchiveMode.Create,
+                    leaveOpen: true, entryNameEncoding: null, cancellationToken: context.RequestAborted);
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var path in paths)
+                {
+                    var name = Path.GetFileName(path);
+                    for (int suffix = 1; !names.Add(name); suffix++)
+                        name = $"{Path.GetFileNameWithoutExtension(path)} ({suffix}){Path.GetExtension(path)}";
+                    using var input = File.OpenRead(path);
+                    var entry = archive.CreateEntry(name, CompressionLevel.NoCompression);
+                    await using var destination = await entry.OpenAsync(context.RequestAborted);
+                    await input.CopyToAsync(destination, context.RequestAborted);
+                }
+            }, "application/zip", "iFerry.zip");
+        });
+        return ListenAsync(server, route);
+    }
+
+    static async Task<(WebApplication Server, string Address)> ListenAsync(WebApplication server, string route)
+    {
         try
         {
             await server.StartAsync();
